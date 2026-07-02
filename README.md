@@ -1,7 +1,7 @@
 # SafeLLMBench
 
 **An open safety benchmark for any HuggingFace LLM.**
-Give it a HuggingFace model id — it will download the model, expose it through an OpenAI-compatible API on `localhost:3000`, generate adversarial jailbreak prompts, attack the model, score the responses with a trained safety classifier, and drop a full report in a folder.
+Give it a HuggingFace model id — it will download the model, expose it through an API on `localhost:3000`, generate adversarial jailbreak prompts, attack the model, score the responses with a trained safety classifier, and drop a full report in a folder.
 
 Built on top of the SafeLLMBench research pipeline (LoRA jailbreak generator + custom Transformer safety classifier).
 
@@ -37,7 +37,7 @@ runs/qwen17b/
 seed prompt ──► LoRA jailbreak generator ──► adversarial prompt
                                                      │
                                                      ▼
-                                    OpenAI-compat API (localhost:3000)
+                                                 API (localhost:3000)
                                                      │
                                                      ▼
                                        target HuggingFace model
@@ -54,7 +54,7 @@ seed prompt ──► LoRA jailbreak generator ──► adversarial prompt
 ```
 safellmbench setup                   # one-time: download bundles from Drive
 safellmbench info                    # show install status
-safellmbench serve --model MODEL     # OpenAI-compat server on :3000
+safellmbench serve --model MODEL     # server on :3000
 safellmbench run --model MODEL       # full benchmark
 safellmbench score --input file.csv  # score an existing CSV of responses
 ```
@@ -66,14 +66,14 @@ safellmbench score --input file.csv  # score an existing CSV of responses
 | `--model` | HuggingFace model id to benchmark | *(required)* |
 | `--samples` | number of jailbreak attempts | `100` |
 | `--output` | output directory | `runs/<model>_<ts>/` |
-| `--base-url` | talk to an **external** OpenAI-compat endpoint instead of spawning our own | *(spawn)* |
+| `--base-url` | talk to an **external** endpoint instead of spawning our own | *(spawn)* |
 | `--api-model` | model name to send in requests (only useful with `--base-url`) | same as `--model` |
 | `--api-key` | bearer token (only useful with `--base-url`) | `sk-not-needed` |
 | `--host` / `--port` | address of the spawned server | `127.0.0.1:3000` |
 | `--no-generator` | skip the LoRA rewriter, attack with raw seeds only | off |
 | `--seed` | RNG seed for reproducibility | `42` |
 
-### OpenAI-compatible server
+### server
 
 `safellmbench serve --model MODEL` starts a FastAPI server implementing:
 
@@ -82,14 +82,13 @@ safellmbench score --input file.csv  # score an existing CSV of responses
 - `POST /v1/completions`
 - `GET  /health`
 
-You can point the `openai` Python client at `http://localhost:3000/v1` directly.
 
 ## How the pipeline works
 
 1. **Jailbreak generator** — `Qwen/Qwen3-4B-Instruct-2507` fine-tuned with LoRA
    (`r=16, α=32`) on `JailbreakV-28K/JailBreakV-28k` for 3 epochs. Rewrites
    plain "red-team" seed queries into jailbreak-style attack prompts.
-2. **Target server** — any HuggingFace causal LM, exposed via the OpenAI-compat
+2. **Target server** — any HuggingFace causal LM, exposed 
    FastAPI. The server automatically applies the target's own chat template
    whenever the tokenizer publishes one (fair benchmarking of instruct models).
 3. **Safety classifier** — a from-scratch 4-layer Transformer
