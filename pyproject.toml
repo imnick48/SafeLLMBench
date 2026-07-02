@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "safellmbench"
+version = "0.1.0"
+description = "Open safety benchmark for HuggingFace LLMs — jailbreak generator + safety classifier."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "SafeLLMBench" }]
+dependencies = [
+    "torch>=2.1",
+    "transformers>=4.56.0",
+    "tokenizers>=0.21",
+    "peft>=0.10",
+    "accelerate>=0.34",
+    "safetensors",
+    "sentencepiece",
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.29",
+    "pydantic>=2.4",
+    "requests>=2.31",
+    "gdown>=5.0",
+    "matplotlib>=3.7",
+    "pandas>=2.0",
+    "tqdm",
+    "huggingface_hub",
+]
+
+[project.scripts]
+safellmbench = "safellmbench.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["safellmbench*"]

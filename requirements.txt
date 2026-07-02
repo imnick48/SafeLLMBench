@@ -1,0 +1,16 @@
+torch>=2.1
+transformers>=4.56.0
+tokenizers>=0.21
+peft>=0.10
+accelerate>=0.34
+safetensors
+sentencepiece
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.4
+requests>=2.31
+gdown>=5.0
+matplotlib>=3.7
+pandas>=2.0
+tqdm
+huggingface_hub

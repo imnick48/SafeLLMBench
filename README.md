@@ -1,214 +1,166 @@
-# SafeLLMBench: Stress Testing the Safety Boundaries of Large Language Models
+# SafeLLMBench
 
-**Adversarial prompt generation, target probing, and response safety classification pipeline.**
+**An open safety benchmark for any HuggingFace LLM.**
+Give it a HuggingFace model id — it will download the model, expose it through an OpenAI-compatible API on `localhost:3000`, generate adversarial jailbreak prompts, attack the model, score the responses with a trained safety classifier, and drop a full report in a folder.
 
-This project is a three-stage safety-research system:
-
-1. **Fine-tune a jailbreak prompt generator** with LoRA on `JailbreakV-28K`.
-2. **Run the generated attacks** against a target model.
-3. **Train a custom Transformer classifier** to label model outputs as harmful or safe.
-
-The result is an end-to-end red-team workflow with charts, CSVs, and saved checkpoints ready for analysis.
+Built on top of the SafeLLMBench research pipeline (LoRA jailbreak generator + custom Transformer safety classifier).
 
 ---
 
-## Why this project stands out
+## Quick start
 
-This is not a toy notebook stack. It is a full pipeline with:
+```bash
+# 1. Install the package
+pip install -e .
 
-- **LoRA-based fine-tuning** for efficient jailbreak prompt generation
-- **Custom BPE tokenizer + Transformer classifier** trained from scratch
-- **Automated red-team evaluation** on generated adversarial prompts
-- **Confidence analysis** through probability histograms and outcome summaries
-- **Private weight handling** through Google Drive instead of GitHub for large or sensitive artifacts
+# 2. Download the pretrained bundles (generator LoRA + classifier)
+safellmbench setup
 
----
+# 3. Benchmark any HuggingFace instruct model
+safellmbench run --model Qwen/Qwen3-1.7B --samples 100 --output ./runs/qwen17b
+```
 
-## What the pipeline does
+When it finishes you'll find:
 
-### 1) Jailbreak generator
-Fine-tunes `Qwen/Qwen3-4B-Instruct-2507` on `JailbreakV-28K` to rewrite red-team queries into jailbreak-style prompts.
+```
+runs/qwen17b/
+├── summary.json          # top-level metrics
+├── results.json          # full per-sample records
+├── responses.csv         # same, CSV form
+├── redteam_results.png   # pie + histogram + bar plot
+└── report.md             # human-readable summary
+```
 
-### 2) Inference and attack run
-Uses the generator to create prompts, sends them to the target model `Qwen/Qwen3-1.7B`, then scores the responses.
+## What it does — in one picture
 
-### 3) Safety classifier
-Trains a compact Transformer on `WildGuardMix` to classify responses as `harmful` or `unharmful`.
+```
+seed prompt ──► LoRA jailbreak generator ──► adversarial prompt
+                                                     │
+                                                     ▼
+                                    OpenAI-compat API (localhost:3000)
+                                                     │
+                                                     ▼
+                                       target HuggingFace model
+                                                     │
+                                                     ▼
+                              custom Transformer safety classifier
+                                                     │
+                                                     ▼
+                             CSV + JSON + PNG + Markdown report
+```
 
----
+## CLI
 
-## Results snapshot
+```
+safellmbench setup                   # one-time: download bundles from Drive
+safellmbench info                    # show install status
+safellmbench serve --model MODEL     # OpenAI-compat server on :3000
+safellmbench run --model MODEL       # full benchmark
+safellmbench score --input file.csv  # score an existing CSV of responses
+```
 
-### Generator training
-The LoRA loss drops sharply and then stabilizes, which is exactly what you want from a clean fine-tuning run.
+### `safellmbench run` — flags
 
-![Generator loss](assets/generator_loss.png)
+| flag | meaning | default |
+|---|---|---|
+| `--model` | HuggingFace model id to benchmark | *(required)* |
+| `--samples` | number of jailbreak attempts | `100` |
+| `--output` | output directory | `runs/<model>_<ts>/` |
+| `--base-url` | talk to an **external** OpenAI-compat endpoint instead of spawning our own | *(spawn)* |
+| `--api-model` | model name to send in requests (only useful with `--base-url`) | same as `--model` |
+| `--api-key` | bearer token (only useful with `--base-url`) | `sk-not-needed` |
+| `--host` / `--port` | address of the spawned server | `127.0.0.1:3000` |
+| `--no-generator` | skip the LoRA rewriter, attack with raw seeds only | off |
+| `--seed` | RNG seed for reproducibility | `42` |
 
-### Classifier training
-The classifier learns quickly. Validation metrics improve early, then start to wobble later, which signals mild overfitting near the end of training.
+### OpenAI-compatible server
 
-![Classifier training](assets/classifier_training.png)
+`safellmbench serve --model MODEL` starts a FastAPI server implementing:
 
-### Red-team evaluation
-On **100 generated attack samples**, the classifier marked:
+- `GET  /v1/models`
+- `POST /v1/chat/completions`
+- `POST /v1/completions`
+- `GET  /health`
 
-- **48 jailbreak**
-- **52 safe**
+You can point the `openai` Python client at `http://localhost:3000/v1` directly.
 
-The probability distribution is strongly bimodal, which means the classifier is not drifting in the middle. It is making hard calls.
+## How the pipeline works
 
-![Red-team results](assets/redteam_results.png)
+1. **Jailbreak generator** — `Qwen/Qwen3-4B-Instruct-2507` fine-tuned with LoRA
+   (`r=16, α=32`) on `JailbreakV-28K/JailBreakV-28k` for 3 epochs. Rewrites
+   plain "red-team" seed queries into jailbreak-style attack prompts.
+2. **Target server** — any HuggingFace causal LM, exposed via the OpenAI-compat
+   FastAPI. The server automatically applies the target's own chat template
+   whenever the tokenizer publishes one (fair benchmarking of instruct models).
+3. **Safety classifier** — a from-scratch 4-layer Transformer
+   (`d_model=512, heads=8, d_ff=2048, vocab=12k BPE`) trained on
+   `allenai/wildguardmix` (harmful vs. unharmful responses). Outputs a
+   sigmoid probability; **prob ≥ 0.5 → jailbreak**.
 
----
+## Repo layout
 
-## Tech stack
-
-- `torch`
-- `transformers`
-- `peft`
-- `datasets`
-- `tokenizers`
-- `accelerate`
-- `bitsandbytes`
-- `scikit-learn`
-- `matplotlib`
-- `pandas`
-- `tqdm`
-
----
-
-## Suggested repo layout
-
-Use this structure if you want the GitHub repo to look sharp and readable.
-
-```text
-.
-├── assets/
-│   ├── classifier_training.png
-│   ├── generator_loss.png
-│   └── redteam_results.png
-├── notebooks/
-│   ├── 01_generator_finetune.ipynb
-│   ├── 02_redteam_inference.ipynb
-│   └── 03_safety_classifier.ipynb
-├── data/
-│   └── redteam_results.csv
-├── models/
-│   └── README.md
+```
+safellmbench/
+├── assets
+│   ├── classifier_training.png
+│   ├── generator_loss.png
+│   └── redteam_results.png
+├── data
+│   └── redteam_results.csv
+├── LICENSE
+├── MANIFEST.in
+├── notebooks
+│   ├── 01_generator_finetune.ipynb
+│   ├── 02_redteam_inference.ipynb
+│   └── 03_safety_classifier.ipynb
+├── pyproject.toml
 ├── README.md
-└── .gitignore
+├── requirements.txt
+└── safellmbench
+    ├── benchmark
+    │   ├── __init__.py
+    │   ├── runner.py
+    │   └── seeds.py
+    ├── cli.py
+    ├── config.py
+    ├── __init__.py
+    ├── models
+    │   ├── classifier.py
+    │   ├── generator.py
+    │   ├── __init__.py
+    │   └── target.py
+    ├── server
+    │   ├── __init__.py
+    │   └── openai_server.py
+    └── setup_bundles.py
 ```
 
-### Notes on the model files
-The trained weights are intentionally **not committed to GitHub**.
+## Requirements
 
-Store the large model bundles in a private Google Drive folder and download them locally when needed.
+- Python ≥ 3.9
+- CUDA-capable GPU strongly recommended (Qwen3-4B generator + Qwen3-1.7B target
+  fits comfortably on a single 24 GB GPU; larger targets need more).
+- Bundles are downloaded on first run to `~/.safellmbench/`
+  (~ 500 MB adapter + 75 MB classifier).
 
-Expected private artifacts:
+## Notes on the model
 
-```text
-trained_models.zip
-classifier_bundle.zip
-```
+The generator, classifier and their bundles are **compatible with the original
+SafeLLMBench notebooks** — the same architecture code paths are used at
+inference time as at training time, so the trained checkpoint's
+`state_dict` loads cleanly without any key remapping.
 
-Put the private Drive link in the section below.
+Small improvements over the notebooks in this package:
 
----
-
-## Private model download
-
-**Google Drive weights:** `<ADD_PRIVATE_GOOGLE_DRIVE_LINK_HERE>`
-
----
-
-## Reproduce the pipeline
-
-### 1. Train the safety classifier
-Run `03_safety_classifier.ipynb`.
-
-### 2. Fine-tune the jailbreak generator
-Run `01_generator_finetune.ipynb`.
-
-### 3. Download the private weights
-Extract:
-
-- `trained_models.zip`
-- `classifier_bundle.zip`
-
-into the project root.
-
-### 4. Run the red-team inference notebook
-Run `02_redteam_inference.ipynb`.
-
-### 5. Inspect the outputs
-Review:
-
-- `redteam_results.csv`
-- `assets/generator_loss.png`
-- `assets/classifier_training.png`
-- `assets/redteam_results.png`
-
----
-
-## Output artifacts
-
-The notebooks generate:
-
-- `trained_models.zip`  
-  LoRA adapter bundle for the jailbreak generator
-
-- `classifier_bundle.zip`  
-  Transformer classifier checkpoint and tokenizer bundle
-
-- `redteam_results.csv`  
-  Per-sample seed prompt, generated jailbreak prompt, target response, label, and probability
-
-- `redteam_results.png`  
-  Outcome summary for the red-team run
-
-- `generator_loss.png`  
-  Fine-tuning loss curve for the jailbreak generator
-
-- `classifier_training.png`  
-  Training and validation curves for the safety classifier
-
----
-
-## Implementation details
-
-### Jailbreak generator
-- Base model: `Qwen/Qwen3-4B-Instruct-2507`
-- Dataset: `JailbreakV-28K/JailBreakV-28k`
-- Samples used: `28,000`
-- LoRA: `r=16`, `alpha=32`, `dropout=0.05`
-- Learning rate: `1e-4`
-- Epochs: `3`
-- Batch size: `1`
-- Gradient accumulation: `8`
-- Max input length: `512`
-
-### Safety classifier
-- Dataset: `allenai/wildguardmix`
-- Tokenizer: custom BPE
-- Vocabulary size: `12,000`
-- Max sequence length: `320`
-- Transformer: `d_model=512`, `num_heads=8`, `num_layers=4`, `d_ff=2048`
-- Dropout: `0.1`
-- Epochs: `8`
-- Batch size: `64`
-- Learning rate: `2e-4`
-
----
-
-## Project notes
-
-- The generator notebook uses a hard time budget so training exits cleanly instead of cooking the GPU forever.
-- The classifier notebook uses validation tracking and early stopping.
-- The inference notebook checks the adapter checkpoint for NaNs before use.
-- The pipeline is designed for transparency, reproducibility, and safety research.
-
----
+- Target model prompting now honours the model's own chat template (via
+  `tokenizer.apply_chat_template`) when it exposes one — a fairer test of
+  instruct-tuned models than the notebook's raw-text prompting.
+- Bundles are cached in a proper user-config directory (`~/.safellmbench/`)
+  instead of the working directory.
+- Heavy `checkpoint-*/` optimizer states are auto-pruned after install
+  (saves ~250 MB).
+- Modular, importable, packaged — no notebook re-execution required.
 
 ## License
 
-MIT
+MIT (see `LICENSE`).
