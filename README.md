@@ -1,4 +1,4 @@
-# RedTeam Hydra
+# SafeLLMBench: Stress Testing the Safety Boundaries of Large Language Models
 
 **Adversarial prompt generation, target probing, and response safety classification pipeline.**
 
@@ -211,4 +211,4 @@ The notebooks generate:
 
 ## License
 
-Add your preferred license here.
+MIT
