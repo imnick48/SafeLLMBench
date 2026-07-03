@@ -86,7 +86,7 @@ The classifier learns quickly. Validation metrics improve early, then start to w
 ![Classifier training](assets/classifier_training.png)
 
 ### Red-team evaluation
-On **100 generated attack samples** against the target model, the classifier marked:
+On **100 generated attack samples** against the target model(Qwen3-1.7B), the classifier marked:
 
 - **48 jailbreak**
 - **52 safe**
