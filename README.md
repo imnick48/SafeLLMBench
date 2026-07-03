@@ -79,7 +79,7 @@ safellmbench run --model my-local-model --base-url http://localhost:8000 --api-m
 
 The LoRA loss drops sharply and then stabilizes, which is exactly what you want from a clean fine-tuning run.
 
-![generator loss](assets/generator_training.png)
+![generator loss](assets/generator_loss.png)
 
 ### Classifier training
 
