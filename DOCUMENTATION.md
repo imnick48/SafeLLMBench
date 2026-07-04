@@ -1,7 +1,5 @@
 # SafeLLMBench — Full Documentation
 
-*Unofficial documentation compiled from a full source-code audit of the `safellmbench` package (v0.1.0), including a hands-on test of the HTTP contract described in Section 5.*
-
 ---
 
 ## Table of Contents
